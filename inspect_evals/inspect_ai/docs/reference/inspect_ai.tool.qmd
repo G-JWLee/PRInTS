@@ -1,0 +1,51 @@
+---
+title: "inspect_ai.tool"
+---
+
+## Tools
+
+### bash
+### python
+### bash_session
+### text_editor
+### web_browser
+### computer
+### web_search
+### think
+
+## MCP
+
+### mcp_connection
+### mcp_server_stdio
+### mcp_server_http
+### mcp_server_sandbox
+### mcp_server_sse
+### mcp_tools
+### MCPServer
+### MCPServerConfig 
+### MCPServerConfigStdio
+### MCPServerConfigHTTP 
+
+## Dynamic 
+
+### tool_with
+### ToolDef
+
+## Types
+
+### Tool
+### ToolResult
+### ToolError
+### ToolCallError
+### ToolChoice
+### ToolFunction
+### ToolInfo
+### ToolParams
+### ToolParam
+### ToolSource
+### WebSearchProviders
+
+## Decorator
+
+### tool
+

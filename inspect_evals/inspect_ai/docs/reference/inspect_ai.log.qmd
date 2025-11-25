@@ -1,0 +1,59 @@
+---
+title: "inspect_ai.log"
+---
+
+## Eval Log Files
+
+### list_eval_logs
+### write_eval_log
+### write_eval_log_async
+### read_eval_log
+### read_eval_log_async
+### read_eval_log_sample
+### read_eval_log_samples
+### read_eval_log_sample_summaries
+### edit_score
+### recompute_metrics
+### convert_eval_logs
+### bundle_log_dir
+### write_log_dir_manifest
+### retryable_eval_logs
+### EvalLogInfo
+
+## Eval Log API
+
+### EvalLog
+### EvalSpec
+### EvalDataset
+### EvalConfig
+### EvalRevision
+### EvalPlan
+### EvalPlanStep
+### EvalResults
+### EvalScore
+### EvalMetric
+### EvalSampleReductions
+### EvalStats
+### EvalError
+### EvalSample
+### EvalSampleSummary
+### EvalSampleLimit
+### EvalSampleReductions
+### EvalSampleScore
+### WriteConflictError
+
+## Transcript API
+
+### transcript
+### Transcript
+
+
+
+
+
+
+
+
+
+
+

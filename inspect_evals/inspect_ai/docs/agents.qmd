@@ -1,0 +1,169 @@
+---
+title: Using Agents
+---
+
+## Overview
+
+Agents combine planning, memory, and tool usage to pursue more complex, longer horizon tasks (e.g. a Capture the Flag challenge). Inspect supports a variety of approaches to agent evaluations, including:
+
+1.  Using Inspect's built-in [ReAct Agent](react-agent.qmd).
+
+2.  Implementing a fully [Custom Agent](agent-custom.qmd).
+
+3.  Composing agents into [Multi Agent](multi-agent.qmd) architectures.
+
+4.  Integrating external frameworks via the [Agent Bridge](agent-bridge.qmd).
+
+5.  Using the [Human Agent](human-agent.qmd) for human baselining of computing tasks.
+
+Below, we'll cover the basic role and function of agents in Inspect. Subsequent articles provide more details on the ReAct agent, custom agents, and multi-agent systems.
+
+If you are looking for state of the art software engineering agents, check out the [Inspect SWE](https://meridianlabs-ai.github.io/inspect_swe/) package which makes Claude Code and Codex CLI available as standard Inspect agents. 
+
+
+## Agent Basics
+
+The Inspect `Agent` protocol enables the creation of agent components that can be flexibly used in a wide variety of contexts. Agents are similar to solvers, but use a narrower interface that makes them much more versatile. A single agent can be:
+
+1.  Used as a top-level `Solver` for a task.
+
+2.  Run as a standalone operation in an agent workflow.
+
+3.  Delegated to in a multi-agent architecture.
+
+4.  Provided as a standard `Tool` to a model
+
+The agents module includes a flexible, general-purpose [react agent](react-agent.qmd), which can be used standalone or to orchestrate a [multi agent](#multi-agent) system.
+
+### Example
+
+The following is a simple `web_surfer()` agent that uses the `web_browser()` tool to do open-ended web research.
+
+``` python
+from inspect_ai.agent import Agent, AgentState, agent
+from inspect_ai.model import ChatMessageSystem, get_model
+from inspect_ai.tool import web_browser
+
+@agent
+def web_surfer() -> Agent:
+    async def execute(state: AgentState) -> AgentState:
+        """Web research assistant."""
+      
+        # some general guidance for the agent
+        state.messages.append(
+            ChatMessageSystem(
+                content="You are an expert at using a " + 
+                "web browser to answer questions."
+            )
+        )
+
+        # run a tool loop w/ the web_browser 
+        messages, output = await get_model().generate_loop(
+            state.messages, tools=web_browser()
+        )
+
+        # update and return state
+        state.output = output
+        state.messages.extend(messages)
+        return state
+
+    return execute
+```
+
+The agent calls the `generate_loop()` function which runs the model in a loop until it stops calling tools. In this case the model may make several calls to the [web_browser()](https://inspect.aisi.org.uk/reference/inspect_ai.tool.html#web_browser) tool to fulfil the request.
+
+While this example illustrates the basic mechanic of agents, you generally wouldn't write a custom agent that does only this (a system prompt with a tool use loop) as the `react()` agent provides a more sophisticated and flexible version of this pattern. Here is the equivalent `react()` agent:
+
+``` python
+from inspect_ai.agent import react
+from inspect_ai.tool import web_browser
+
+web_surfer = react(
+    name="web_surfer",
+    description="Web research assistant",
+    prompt="You are an expert at using a " + 
+           "web browser to answer questions.",
+    tools=web_browser()   
+)
+```
+
+See the [ReAct Agent](react-agent.qmd) article for more details on using and customizing ReAct agents.
+
+### Using Agents {#using-agents}
+
+Agents can be used in the following ways:
+
+1.  Agents can be passed as a `Solver` to any Inspect interface that takes a solver:
+
+    ``` python
+    from inspect_ai import eval
+
+    eval("research_bench", solver=web_surfer())
+    ```
+
+    For other interfaces that aren't aware of agents, you can use the `as_solver()` function to convert an agent to a solver.
+
+2.  Agents can be executed directly using the `run()` function (you might do this in a multi-step agent workflow):
+
+    ``` python
+    from inspect_ai.agent import run
+
+    state = await run(
+        web_surfer(), "What were the 3 most popular movies of 2020?"
+    )
+    print(f"The most popular movies were: {state.output.completion}")
+    ```
+
+
+3.  Agents can be used as a standard tool using the `as_tool()` function:
+
+    ``` python
+    from inspect_ai.agent import as_tool
+    from inspect_ai.solver import use_tools, generate
+
+    eval(
+        task="research_bench", 
+        solver=[
+            use_tools(as_tool(web_surfer())),
+            generate()
+        ]
+    )
+    print(f"The most popular movies were: {state.output.completion}")
+    ```
+
+4.  Agents can participate in multi-agent systems where the conversation history is shared across agents. Use the `handoff()` function to create a tool that enables handing off the conversation from one agent to another:
+
+    ``` python
+    from inspect_ai.agent import handoff
+    from inspect_ai.solver import use_tools, generate
+    from math_tools import addition
+
+    eval(
+        task="research_bench", 
+        solver=[
+            use_tools(addition(), handoff(web_surfer())),
+            generate()
+        ]
+    )
+    ```
+
+    The difference between `handoff()` and `as_tool()` is that `handoff()` forwards the entire conversation history to the agent (and enables the agent to add entries to it) whereas `as_tool()` provides a simple string in, string out interface to the agent.
+
+
+
+## Learning More
+
+See these additional articles to learn more about creating agent evaluations with Inspect:
+
+-   [ReAct Agent](react-agent.qmd) provides details on using and customizing the built-in ReAct agent.
+
+-   [Multi Agent](multi-agent.qmd) covers various ways to compose agents together in multi-agent architectures.
+
+-   [Custom Agents](agent-custom.qmd) describes Inspect APIs available for creating custom agents.
+
+-   [Agent Bridge](agent-bridge.qmd) enables the use of agents from 3rd party frameworks like OpenAI Agents SDK, LangChain, and Pydantic AI with Inspect.
+
+-   [Human Agent](human-agent.qmd) is a solver that enables human baselining on computing tasks.
+
+-   [Agent Limits](agent-custom.qmd#agent-limits) details how to set token, message, and time limits for agent execution.
+

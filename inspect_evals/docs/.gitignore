@@ -1,0 +1,13 @@
+contributing/index.qmd
+
+/.quarto/
+evals/
+
+.env
+logs/
+__pycache__/
+
+_site/
+
+
+**/*.quarto_ipynb

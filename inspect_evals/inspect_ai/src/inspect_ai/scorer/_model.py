@@ -1,0 +1,380 @@
+import re
+from functools import partial
+from typing import Any, Callable
+
+from inspect_ai._util.content import Content, ContentText
+from inspect_ai._util.dict import omit
+from inspect_ai._util.format import format_function_call
+from inspect_ai._util.list import remove_last_match_and_after
+from inspect_ai.model._chat_message import (
+    ChatMessage,
+    ChatMessageAssistant,
+    ChatMessageSystem,
+    ChatMessageTool,
+    ChatMessageUser,
+)
+from inspect_ai.model._model import Model, get_model
+from inspect_ai.model._model_output import ModelOutput
+from inspect_ai.solver._task_state import TaskState
+from inspect_ai.util import resource
+
+from ._metric import INCORRECT, Score
+from ._metrics import accuracy, stderr
+from ._multi import multi_scorer
+from ._scorer import Scorer, scorer
+from ._target import Target
+
+
+@scorer(metrics=[accuracy(), stderr()])
+def model_graded_fact(
+    template: str | None = None,
+    instructions: str | None = None,
+    grade_pattern: str | None = None,
+    include_history: bool | Callable[[TaskState], str] = False,
+    partial_credit: bool = False,
+    model: list[str | Model] | str | Model | None = None,
+    model_role: str | None = "grader",
+) -> Scorer:
+    """Score a question/answer task with a fact response using a model.
+
+    Args:
+      template: Template for grading prompt. This template uses
+        four variables: `question`, `criterion`, `answer`, and
+        `instructions` (which is fed from the `instructions` parameter).
+        Variables from sample `metadata` are also available in the template.
+      instructions: Grading instructions. This should
+        include a prompt for the model to answer (e.g. with
+        with chain of thought reasoning) in a way that matches
+        the specified `grade_pattern`, for example, the default
+        `grade_pattern` looks for one of GRADE: C, GRADE: P, or
+        GRADE: I).
+      grade_pattern: Regex to extract the grade from the
+        model response. Defaults to looking for e.g. GRADE: C
+        The regex should have a single capture group that
+        extracts exactly the letter C, P, or I.
+      include_history:
+        Whether to include the full chat history in the presented
+        question. Defaults to `False`, which presents only the
+        original sample input. Optionally provide a function to
+        customise how the chat history is presented.
+      partial_credit: Whether to allow for "partial" credit for
+         answers (by default assigned a score of 0.5). Defaults
+         to `False`. Note that this parameter is only used
+         with the default `instructions` (as custom instructions
+         provide their own prompts for grades).
+      model: Model or models to use for grading. If a list is provided,
+        each model grades independently and the final grade is computed by
+        majority vote. When this parameter is provided, it takes precedence
+        over `model_role`.
+      model_role: Named model role to use for grading (default: "grader").
+        Ignored if `model` is provided. If specified and a model is bound to
+        this role (e.g. via the `model_roles` argument to `eval()`), that model
+        is used. If no role-bound model is available, the model being
+        evaluated (the default model) is used.
+    """
+    return model_graded_qa(
+        template=template if template else DEFAULT_MODEL_GRADED_FACT_TEMPLATE,
+        instructions=instructions,
+        grade_pattern=grade_pattern,
+        include_history=include_history,
+        partial_credit=partial_credit,
+        model=model,
+        model_role=model_role,
+    )
+
+
+@scorer(metrics=[accuracy(), stderr()])
+def model_graded_qa(
+    template: str | None = None,
+    instructions: str | None = None,
+    grade_pattern: str | None = None,
+    include_history: bool | Callable[[TaskState], str] = False,
+    partial_credit: bool = False,
+    model: list[str | Model] | str | Model | None = None,
+    model_role: str | None = "grader",
+) -> Scorer:
+    """Score a question/answer task using a model.
+
+    Args:
+      template: Template for grading prompt. This template has
+        four variables:
+           - `question`, `criterion`, `answer`, and
+        `instructions` (which is fed from the `instructions` parameter).
+        Variables from sample `metadata` are also available in the template.
+      instructions: Grading instructions. This should
+        include a prompt for the model to answer (e.g. with
+        with chain of thought reasoning) in a way that matches
+        the specified `grade_pattern`, for example, the default
+        `grade_pattern` looks for one of GRADE: C, GRADE: P, or
+        GRADE: I.
+      grade_pattern: Regex to extract the grade from the
+        model response. Defaults to looking for e.g. GRADE: C
+        The regex should have a single capture group that
+        extracts exactly the letter C, P, I.
+      include_history:
+        Whether to include the full chat history in the presented
+        question. Defaults to `False`, which presents only the
+        original sample input. Optionally provide a function to
+        customise how the chat history is presented.
+      partial_credit: Whether to allow for "partial" credit for
+        answers (by default assigned a score of 0.5). Defaults
+        to `False`. Note that this parameter is only used
+        with the default `instructions` (as custom instructions
+        provide their own prompts for grades).
+      model: Model or models to use for grading. If a list is provided,
+        each model grades independently and the final grade is computed by
+        majority vote. When this parameter is provided, it takes precedence
+        over `model_role`.
+      model_role: Named model role to use for grading (default: "grader").
+        Ignored if `model` is provided. If specified and a model is bound to
+        this role (e.g. via the `model_roles` argument to `eval()`), that
+        model is used. If no role-bound model is available, the model being
+        evaluated (the default model) is used.
+    """
+    # bind variables
+    get_scorer = partial(
+        _model_graded_qa_single,
+        template,
+        instructions,
+        grade_pattern,
+        include_history,
+        partial_credit,
+        model_role=model_role,
+    )
+    # if only a single model is passed, return a single scorer
+    if model is None or not isinstance(model, list):
+        return get_scorer(model)
+
+    # otherwise, use multi scorer
+    assert isinstance(model, list)
+    scorers = [get_scorer(model) for model in model]
+    return multi_scorer(scorers, "mode")
+
+
+@scorer(metrics=[accuracy(), stderr()])
+def _model_graded_qa_single(
+    template: str | None = None,
+    instructions: str | None = None,
+    grade_pattern: str | None = None,
+    include_history: bool | Callable[[TaskState], str] = False,
+    partial_credit: bool = False,
+    model: str | Model | None = None,
+    model_role: str | None = "grader",
+) -> Scorer:
+    # returns a scorer that does model graded qa for a single model
+
+    # resolve grading template, instructions, and grade_pattern
+    template = template if template else DEFAULT_MODEL_GRADED_QA_TEMPLATE
+    grading_template = resource(template)
+    instructions = (
+        instructions if instructions else default_instructions(partial_credit)
+    )
+
+    async def score(state: TaskState, target: Target) -> Score:
+        # resolve model
+        nonlocal model
+        # Order of precedence: `model` > `model_role` > default model
+        if model is not None:
+            model = model if isinstance(model, Model) else get_model(model)
+        elif model_role is not None:
+            model = get_model(role=model_role)
+        else:
+            model = get_model()
+
+        # metadata without grading template variables
+        metadata = omit(
+            state.metadata, ["question", "answer", "criterion", "instructions"]
+        )
+
+        # present the question
+        if include_history is True:
+            question = chat_history(state)
+        elif callable(include_history):
+            question = include_history(state)
+        else:
+            question = state.input_text
+
+        # format the scoring template
+        scoring_prompt = model_scoring_prompt(
+            template=grading_template,
+            question=question,
+            output=state.output,
+            criterion=target.text,
+            instructions=instructions,
+            metadata=metadata,
+        )
+
+        # query the model for the score
+        result = await model.generate([scoring_prompt])
+
+        # extract the grade
+        match = re.search(grade_pattern or DEFAULT_GRADE_PATTERN, result.completion)
+        if match:
+            return Score(
+                value=match.group(1),
+                answer=state.output.completion,
+                explanation=result.completion,
+                metadata=dict(
+                    grading=[
+                        scoring_prompt,
+                        result.message,
+                    ]
+                ),
+            )
+        else:
+            return Score(
+                value=INCORRECT,
+                explanation="Grade not found in model output: "
+                + f"{result.completion}",
+                metadata=dict(
+                    grading=[
+                        scoring_prompt,
+                        result.message,
+                    ]
+                ),
+            )
+
+    return score
+
+
+# these templates are based on the openai closedqa templates here:
+# https://github.com/openai/evals/blob/main/evals/registry/modelgraded/closedqa.yaml
+DEFAULT_MODEL_GRADED_QA_TEMPLATE = """
+You are assessing a submitted answer on a given task based on a criterion. Here is the data:
+
+[BEGIN DATA]
+***
+[Task]: {question}
+***
+[Submission]: {answer}
+***
+[Criterion]: {criterion}
+***
+[END DATA]
+
+Does the submission meet the criterion?
+
+{instructions}
+"""
+
+DEFAULT_MODEL_GRADED_FACT_TEMPLATE = """
+You are comparing a submitted answer to an expert answer on a given question. Here is the data:
+
+[BEGIN DATA]
+************
+[Question]: {question}
+************
+[Expert]: {criterion}
+************
+[Submission]: {answer}
+************
+[END DATA]
+
+Compare the factual content of the submitted answer with the expert answer. Ignore any differences in style, grammar, or punctuation.
+
+Does the submission contain the content in the expert answer?
+
+{instructions}
+"""
+
+
+def default_instructions(partial_credit: bool) -> str:
+    partial_letter = "P" if partial_credit else ""
+    partial_prompt = '"P" for partially correct answers,' if partial_credit else ""
+    return f"""
+After assessing the submitted answer, reply with 'GRADE: $LETTER' (without quotes) where LETTER is one of C{partial_letter}I.  Please choose ONE option for the grade: either "C" for correct answers, {partial_prompt}or "I" for incorrect answers.
+
+For example, after reviewing a correct answer you might write 'GRADE: C' or after reviewing an incorrect answer you might write 'GRADE: I'.
+
+First, write out in a step by step manner your reasoning about the criterion to be sure that your conclusion is correct. Avoid simply stating the correct answers at the outset. Then, end with your answer formatted as 'GRADE: $LETTER' (without quotes) where LETTER is one of C{partial_letter}I.
+"""
+
+
+DEFAULT_GRADE_PATTERN = r"(?i)GRADE\s*:\s*([CPI])(.*)$"
+"""Regex to extract the grade from the COT above."""
+
+
+def chat_history(state: TaskState) -> str:
+    # filter out system messages
+    messages: list[ChatMessage] = [
+        message
+        for message in state.messages
+        if not isinstance(message, ChatMessageSystem)
+    ]
+
+    # present message history (removing the final assistant message
+    # and after as it will be contained in the 'Answer:'):
+    messages = remove_last_match_and_after(
+        messages, lambda message: isinstance(message, ChatMessageAssistant)
+    )
+
+    # begin history with text of first message (it will come right after
+    # 'Task' or 'Question' in the template)
+    history: list[str] = []
+    if len(messages) > 0:
+        history.append(messages[0].text)
+
+        # for subsequent messages present with e.g. Assistant: {message.text}
+        for message in messages[1:]:
+            if isinstance(message, ChatMessageUser):
+                history.append(f"User: {message.text}")
+            elif isinstance(message, ChatMessageAssistant):
+                assistant_message = [message.text] if message.text else []
+                if message.tool_calls:
+                    assistant_message.extend(
+                        [
+                            format_function_call(
+                                tool_call.function, tool_call.arguments
+                            )
+                            for tool_call in message.tool_calls
+                        ]
+                    )
+                history.append("Assistant: " + "\n\n".join(assistant_message))
+            elif isinstance(message, ChatMessageTool):
+                history.append(
+                    f"Tool ({message.function}): {message.tool_error or ''}{message.text}"
+                )
+
+    return "\n\n".join(history)
+
+
+def model_scoring_prompt(
+    *,
+    template: str,
+    question: str,
+    output: ModelOutput,
+    criterion: str,
+    instructions: str,
+    metadata: dict[str, Any],
+) -> ChatMessageUser:
+    # we need to remove media objects from output and reference them as attachements in the answer
+    answer = output.completion
+    media: list[Content] = (
+        [
+            content
+            for content in output.message.content
+            if content.type in ["image", "audio", "video"]
+        ]
+        if len(output.choices) > 0 and isinstance(output.message.content, list)
+        else []
+    )
+    if len(media) > 0:
+        if len(answer) > 0:
+            answer = f"{answer} (see also attached media)"
+        else:
+            answer = "See attached media"
+
+    # format the prompt
+    prompt = template.format(
+        question=question,
+        answer=answer,
+        criterion=criterion,
+        instructions=instructions,
+        **metadata,
+    )
+
+    # return with media if necessary
+    if len(media) > 0:
+        return ChatMessageUser(content=[ContentText(text=prompt)] + media)
+    else:
+        return ChatMessageUser(content=prompt)

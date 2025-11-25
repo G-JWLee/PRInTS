@@ -1,11 +1,11 @@
-# PRInTS
+# [PRInTS: Rewarding Agents for Long-Horizon Information Seeking](TBD)
 
-### **[PRInTS: Rewarding Agents for Long-Horizon Information Seeking](TBD)**
-* Authors: [Jaewoo Lee](https://g-jwlee.github.io/), [Archiki Prasad](https://archiki.github.io/), [Justin Chih-Yao Chen](https://dinobby.github.io/), [Zaid Khan](https://zaidkhan.me/), [Elias Stengel-Eskin](https://esteng.github.io/), [Mohit Bansal](https://www.cs.unc.edu/~mbansal/)
-* Preprint
+[![Paper](https://img.shields.io/badge/Paper-arXiv-red)](TBD)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+[Jaewoo Lee](https://g-jwlee.github.io/) | [Archiki Prasad](https://archiki.github.io/) | [Justin Chih-Yao Chen](https://dinobby.github.io/) | [Zaid Khan](https://zaidkhan.me/) | [Elias Stengel-Eskin](https://esteng.github.io/) | [Mohit Bansal](https://www.cs.unc.edu/~mbansal/)
 
 ## Overview
-
 Long-horizon information-seeking tasks require agents to gather and synthesize information across multiple reasoning steps and tool interactions.
 While process reward models (PRMs) can guide agents by ranking candidate steps at test-time, existing PRMs cannot capture richer dimensions of information-seeking steps nor handle the rapidly growing context in long-horizon tasks.
 We propose PRInTS (Process Reward via Information gain scoring and Trjeactory Summary), a generative PRM jointly trained with two key abilities for fine-grained guidance under the challenge of context accumulation.
@@ -24,7 +24,7 @@ Please follow the installation instructions from [verl](https://github.com/volce
 ## Data annotation
 Our data annotation pipeline is based on Inspect Eval evaluation framework.
 Please follow the installation isntructions from [Inspect Eval](https://github.com/UKGovernmentBEIS/inspect_evals).
-Download the QA corpus from [MiroVerse](https://huggingface.co/datasets/miromind-ai/MiroVerse-v0.1), and [webagent families](https://github.com/Alibaba-NLP/DeepResearch) and store it in /webagent_corpus_directory directory.
+Download the QA corpus from [MiroVerse](https://huggingface.co/datasets/miromind-ai/MiroVerse-v0.1) and [webagent families](https://github.com/Alibaba-NLP/DeepResearch), and store them in /webagent_corpus_directory directory.
 
 For scoring annotation, run
 ```shell
@@ -67,7 +67,7 @@ For evaluation we use the [Inspect Eval](https://github.com/UKGovernmentBEIS/ins
       title={PRInTS: Reward Modeling for Long-Horizon Information Seeking},
       author={Jaewoo Lee and Archiki Prasad and Justin Chih-Yao Chen and Zaid Khan and Elias Stengel-Eskin and Mohit Bansal},
       year={2025},
-      journal={arXiv preprint arXiv:xx},
-      url={https://arxiv.org/abs/xx}, 
+      journal={arXiv preprint arXiv:2511.19314},
+      url={https://arxiv.org/abs/2511.19314},
 }
 ```

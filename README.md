@@ -1,6 +1,6 @@
-# [PRInTS: Rewarding Agents for Long-Horizon Information Seeking](TBD)
+# [PRInTS: Rewarding Agents for Long-Horizon Information Seeking](https://arxiv.org/abs/2511.19314)
 
-[![Paper](https://img.shields.io/badge/Paper-arXiv-red)](TBD)
+[![Paper](https://img.shields.io/badge/Paper-arXiv-red)](https://arxiv.org/abs/2511.19314)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 [Jaewoo Lee](https://g-jwlee.github.io/) | [Archiki Prasad](https://archiki.github.io/) | [Justin Chih-Yao Chen](https://dinobby.github.io/) | [Zaid Khan](https://zaidkhan.me/) | [Elias Stengel-Eskin](https://esteng.github.io/) | [Mohit Bansal](https://www.cs.unc.edu/~mbansal/)

@@ -8,7 +8,7 @@
 ## Overview
 Long-horizon information-seeking tasks require agents to gather and synthesize information across multiple reasoning steps and tool interactions.
 While process reward models (PRMs) can guide agents by ranking candidate steps at test-time, existing PRMs cannot capture richer dimensions of information-seeking steps nor handle the rapidly growing context in long-horizon tasks.
-We propose PRInTS (Process Reward via Information gain scoring and Trjeactory Summary), a generative PRM jointly trained with two key abilities for fine-grained guidance under the challenge of context accumulation.
+We propose PRInTS (Process Reward via Information gain scoring and Trajectory Summary), a generative PRM jointly trained with two key abilities for fine-grained guidance under the challenge of context accumulation.
 
 <center><img src="assets/PRInTS_overview.png" alt="Teaser" width="100%"></center>
 <p>
@@ -52,6 +52,14 @@ python examples/data_preprocess/prints_grpo_dataset.py --data_path /annotated_da
 python examples/data_preprocess/prints_sftdataset.py --data_path /annotated_data_dir/annotated_sample_summary.json --local_dir benchmarks/PRInTS_summary_annotation --tokenizer_path Qwen/Qwen3-4B --max_prompt_length 8192
 ```
 
+## Download Models
+Download our PRInTS from huggingface:
+
+| Model | Download Link |
+|-------|---------------|
+| **PRInTS** | [![Hugging Face](https://img.shields.io/badge/🤗-Qwen3--4B--PRInTS-yellow.svg)](https://huggingface.co/Jaew00Lee/Qwen3-4B-PRInTS) |
+
+
 ## Training
 We train PRInTS on Qwen3-4B with our alternating SFT-GRPO training schedule.
 ```shell
@@ -63,7 +71,7 @@ For evaluation we use the [Inspect Eval](https://github.com/UKGovernmentBEIS/ins
 
 ## Bibtex
 ```
-@article{lee2024prints,
+@article{lee2025prints,
       title={PRInTS: Reward Modeling for Long-Horizon Information Seeking},
       author={Jaewoo Lee and Archiki Prasad and Justin Chih-Yao Chen and Zaid Khan and Elias Stengel-Eskin and Mohit Bansal},
       year={2025},
